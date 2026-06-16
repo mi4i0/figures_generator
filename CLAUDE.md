@@ -32,9 +32,13 @@ src/
   shape milsymbol emits (circle / rectangle / rhombus / square / quatrefoil).
 - **Filament slots**: 1 = frame color, 2 = black, 3 = spare/extra. Slot 1 is the largest-area
   fill color (auto-detected in `badgeBuilder.detectFrameColor`).
-- **Base plate**: `buildBaseOutline` (in `svgToParts.ts`) = clipper Union of ALL part polygons,
-  then a morphological closing (dilate+erode by `baseBridge` mm) so detached amplifier marks
-  (echelon above, mobility/towed below, HQ/TF/dummy around) connect into ONE printable base.
+- **Base plate**: `buildBaseOutline` (in `svgToParts.ts`) = frame fill + a SOLID rectangle behind
+  each external amplifier group (echelon above / mobility/towed below the frame box, classified by
+  each mark's center-Y), unioned and lightly closed (`baseBridge`). The solid rects give a
+  continuous background under amplifier marks instead of a gappy trace, and keep the bottom edge
+  solid so the peg can attach there.
+- **Peg start**: the peg ("палочка") starts at the badge's bottom edge (centered) and overlaps a
+  few mm up into the solid base to fuse — it must NOT run up to the badge center.
 - **Mounting** (`settings.mount`): `'magnet'` = `negative_part` cylinder recess in the back
   (slicer subtracts it, no browser CSG; default ⌀8.2 × 2.2 mm); `'peg'` = a `normal_part` post
   ("палочка") at the bottom-center of the FULL footprint (below mobility/towed marks), in-plane

@@ -138,7 +138,7 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
   // (echelon, mobility/towed array, HQ/task force/dummy) get a connected base
   // instead of floating above the build plate. Closing distance is in SVG units.
   const bridgeUnits = settings.baseBridge > 0 ? settings.baseBridge / s : 0;
-  const basePolys = buildBaseOutline(parts, bridgeUnits);
+  const basePolys = buildBaseOutline(parts, bridgeUnits, frameColor);
   const base = buildMesh('base', basePolys, map, 0, settings.baseThickness, 1);
   if (base) meshes.push(base);
 
@@ -184,17 +184,19 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
     settings.pegLength > 0 &&
     settings.pegHeight > 0
   ) {
-    // Stand peg ("палочка"): a rod protruding below the FULL footprint (so it
-    // clears mobility/towed-array marks) to plug into a separately-printed base.
-    // It runs in the badge plane; its TOP reaches the badge center (y=0), always
-    // inside the frame fill, so it fuses with the base even when the lowest
-    // geometry is an off-center amplifier mark. Z is its own height, resting on
-    // the build plate (z=0) so badge + peg print flat as one solid piece.
-    const bottomEdge = map(cx, bbox.maxY)[1]; // lowest footprint point, in mm (negative)
+    // Stand peg ("палочка"): a rod that STARTS at the bottom edge of the badge
+    // (centered) and protrudes below it, to plug into a separately-printed base.
+    // The amplifier background is solid (see buildBaseOutline), so the bottom is
+    // continuous material; the peg just overlaps a few mm up into it to fuse.
+    // Z is its own height, resting on the build plate (z=0) so badge + peg print
+    // flat as one solid piece.
+    const overlap = Math.min(2.5, settings.baseThickness); // mm up into the base
+    const bottomEdge = map(cx, bbox.maxY)[1]; // bottom of the footprint, in mm (negative)
+    const pegTop = bottomEdge + overlap; // start at the badge bottom, slightly inside
     const pegBottom = bottomEdge - settings.pegLength; // tip protrudes pegLength below
-    const lengthY = 0 - pegBottom; // from y=0 (center) down to the tip
+    const lengthY = pegTop - pegBottom;
     const peg = new THREE.BoxGeometry(settings.pegWidth, lengthY, settings.pegHeight);
-    peg.translate(0, pegBottom / 2, settings.pegHeight / 2);
+    peg.translate(0, (pegTop + pegBottom) / 2, settings.pegHeight / 2);
     peg.deleteAttribute('uv');
     peg.deleteAttribute('normal');
     meshes.push(toPartMesh('peg', peg, 1, 'normal_part'));

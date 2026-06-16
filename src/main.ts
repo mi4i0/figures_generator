@@ -1,5 +1,5 @@
 import './style.css';
-import { sidcToSvg, setAffiliation, formatSidc, normalizeSidc } from './symbol';
+import { sidcToSvg, normalizeSidc } from './symbol';
 import { svgToParts } from './svgToParts';
 import { buildBadge } from './badgeBuilder';
 import { buildThreeMf } from './threeMf';
@@ -13,7 +13,6 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 
 const sidcInput = $<HTMLInputElement>('sidc');
-const affiliationSel = $<HTMLSelectElement>('affiliation');
 const sizeInput = $<HTMLInputElement>('size');
 const countInput = $<HTMLInputElement>('count');
 const baseInput = $<HTMLInputElement>('baseThickness');
@@ -122,14 +121,6 @@ function scheduleRegenerate(): void {
   clearTimeout(debounce);
   debounce = window.setTimeout(regenerate, 120);
 }
-
-// The affiliation dropdown patches digit 4 of the SIDC for convenience,
-// preserving the hyphen-grouped display form if the user is using it.
-affiliationSel.addEventListener('change', () => {
-  const patched = setAffiliation(sidcInput.value, affiliationSel.value);
-  sidcInput.value = sidcInput.value.includes('-') ? formatSidc(patched) : patched;
-  scheduleRegenerate();
-});
 
 mountSel.addEventListener('change', () => {
   syncMountFields();

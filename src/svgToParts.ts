@@ -96,21 +96,106 @@ function offsetClosed(polys: Poly[], deltaScaled: number): Poly[] {
   return out;
 }
 
+interface Box {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+function boxOf(polys: Poly[]): Box | null {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const poly of polys) {
+    for (const p of poly.outer) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+  return minX === Infinity ? null : { minX, minY, maxX, maxY };
+}
+
+const mergeBox = (a: Box, b: Box): Box => ({
+  minX: Math.min(a.minX, b.minX),
+  minY: Math.min(a.minY, b.minY),
+  maxX: Math.max(a.maxX, b.maxX),
+  maxY: Math.max(a.maxY, b.maxY),
+});
+
+const rectPoly = (b: Box): Poly => ({
+  outer: [
+    { x: b.minX, y: b.minY },
+    { x: b.maxX, y: b.minY },
+    { x: b.maxX, y: b.maxY },
+    { x: b.minX, y: b.maxY },
+  ],
+  holes: [],
+});
+
 /**
- * Union every part polygon into a single base outline and, optionally, apply a
- * morphological closing (dilate then erode by `bridgeUnits`). The closing
- * connects amplifier marks that milsymbol draws detached from the frame —
- * echelon (above), mobility / towed array (below), and HQ / task force / dummy
- * markers — so they all share one printable base instead of floating.
+ * Build a single printable base outline.
+ *
+ * The frame fill forms the base. Amplifier marks that milsymbol draws OUTSIDE
+ * the frame (echelon above, mobility / towed array below) are backed by a SOLID
+ * rectangle spanning their extent and joined to the frame — so the background
+ * there is continuous, not a gappy trace of the thin marks. Marks inside/around
+ * the frame are unioned as-is. An optional morphological closing (`bridgeUnits`)
+ * tidies any remaining slivers. (SVG y grows downward: smaller y = above.)
  */
-export function buildBaseOutline(parts: RawPart[], bridgeUnits: number): Poly[] {
-  const clipper = new ClipperLib.Clipper();
+export function buildBaseOutline(
+  parts: RawPart[],
+  bridgeUnits: number,
+  frameColor: string,
+): Poly[] {
+  const framePolys: Poly[] = [];
   for (const part of parts) {
-    for (const poly of part.polys) {
-      clipper.AddPath(toClipperPath(poly.outer), ClipperLib.PolyType.ptSubject, true);
-      for (const hole of poly.holes) {
-        clipper.AddPath(toClipperPath(hole), ClipperLib.PolyType.ptSubject, true);
+    if (part.role === 'fill' && part.color === frameColor) framePolys.push(...part.polys);
+  }
+  const frameBox = boxOf(framePolys);
+
+  const basePolys: Poly[] = [...framePolys];
+  let above: Box | null = null;
+  let below: Box | null = null;
+
+  if (frameBox) {
+    const frameH = frameBox.maxY - frameBox.minY;
+    const pad = frameH * 0.04; // side margin around the marks
+    const connect = frameH * 0.06; // overlap back into the frame
+
+    for (const part of parts) {
+      if (part.role === 'fill' && part.color === frameColor) continue;
+      for (const poly of part.polys) {
+        const b = boxOf([poly]);
+        if (!b) continue;
+        const cy = (b.minY + b.maxY) / 2;
+        if (cy < frameBox.minY) above = above ? mergeBox(above, b) : b; // echelon
+        else if (cy > frameBox.maxY) below = below ? mergeBox(below, b) : b; // mobility/towed
+        else basePolys.push(poly); // inside the frame: keep as-is (e.g. frame ring)
       }
+    }
+    if (above) {
+      basePolys.push(rectPoly({
+        minX: above.minX - pad, maxX: above.maxX + pad,
+        minY: above.minY - pad, maxY: frameBox.minY + connect,
+      }));
+    }
+    if (below) {
+      basePolys.push(rectPoly({
+        minX: below.minX - pad, maxX: below.maxX + pad,
+        minY: frameBox.maxY - connect, maxY: below.maxY + pad,
+      }));
+    }
+  } else {
+    // No detectable frame: fall back to unioning every polygon.
+    for (const part of parts) basePolys.push(...part.polys);
+  }
+
+  const clipper = new ClipperLib.Clipper();
+  for (const poly of basePolys) {
+    clipper.AddPath(toClipperPath(poly.outer), ClipperLib.PolyType.ptSubject, true);
+    for (const hole of poly.holes) {
+      clipper.AddPath(toClipperPath(hole), ClipperLib.PolyType.ptSubject, true);
     }
   }
   const unionTree = new ClipperLib.PolyTree();
