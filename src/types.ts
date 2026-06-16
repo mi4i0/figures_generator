@@ -28,22 +28,41 @@ export interface SvgParts {
   bbox: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
+/** How the badge is mounted/displayed. */
+export type MountType = 'magnet' | 'peg' | 'none';
+
 /** User-configurable physical parameters of the badge (millimeters). */
 export interface BadgeSettings {
   /** Longest footprint dimension. */
   sizeMm: number;
   baseThickness: number;
   lineHeight: number;
+  /** Mounting style: magnet recess, stand peg, or none. */
+  mount: MountType;
   magnetDia: number;
   magnetDepth: number;
+  /** Stand peg ("палочка"): width (X), protrusion length (Y), height/thickness (Z). */
+  pegWidth: number;
+  pegLength: number;
+  pegHeight: number;
+  /**
+   * Morphological-closing distance (mm) used to connect detached amplifier
+   * marks (echelon, mobility, HQ/TF/dummy) to the frame so they share one base.
+   */
+  baseBridge: number;
 }
 
 export const DEFAULT_SETTINGS: BadgeSettings = {
   sizeMm: 25,
   baseThickness: 2.4,
   lineHeight: 0.6,
-  magnetDia: 8.2,
-  magnetDepth: 2.2,
+  mount: 'magnet',
+  magnetDia: 8.15,
+  magnetDepth: 2,
+  pegWidth: 2.5,
+  pegLength: 30,
+  pegHeight: 2.5,
+  baseBridge: 1.2,
 };
 
 /** An indexed triangle mesh in final millimeter coordinates. */

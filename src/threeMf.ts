@@ -33,7 +33,46 @@ function meshXml(mesh: PartMesh): string {
   return `   <mesh>\n    <vertices>\n${verts.join('\n')}\n    </vertices>\n    <triangles>\n${tris.join('\n')}\n    </triangles>\n   </mesh>`;
 }
 
-function modelXml(model: BadgeModel, name: string): string {
+/** Spacing between adjacent copies on the plate, mm. */
+const COPY_GAP = 6;
+
+/**
+ * Lay out `count` copies of the model in a centered grid on the plate, spaced by
+ * the model's actual XY footprint so they never overlap. Returns the (tx, ty)
+ * for each copy's build item (the model is centered on its own origin).
+ */
+function computeLayout(model: BadgeModel, count: number): { tx: number; ty: number }[] {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const mesh of model.meshes) {
+    const v = mesh.vertices;
+    for (let i = 0; i < v.length; i += 3) {
+      if (v[i] < minX) minX = v[i];
+      if (v[i] > maxX) maxX = v[i];
+      if (v[i + 1] < minY) minY = v[i + 1];
+      if (v[i + 1] > maxY) maxY = v[i + 1];
+    }
+  }
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const cellW = maxX - minX + COPY_GAP;
+  const cellH = maxY - minY + COPY_GAP;
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const gridW = cols * cellW;
+  const gridH = rows * cellH;
+
+  const out: { tx: number; ty: number }[] = [];
+  for (let k = 0; k < count; k++) {
+    const col = k % cols;
+    const row = Math.floor(k / cols);
+    const cellCx = BED_CENTER.x + (col + 0.5) * cellW - gridW / 2;
+    const cellCy = BED_CENTER.y + (row + 0.5) * cellH - gridH / 2;
+    out.push({ tx: cellCx - cx, ty: cellCy - cy });
+  }
+  return out;
+}
+
+function modelXml(model: BadgeModel, name: string, layout: { tx: number; ty: number }[]): string {
   const meshes = model.meshes;
   const asmId = meshes.length + 1;
 
@@ -48,7 +87,12 @@ function modelXml(model: BadgeModel, name: string): string {
     .map((_, i) => `    <component objectid="${i + 1}" transform="${IDENTITY}"/>`)
     .join('\n');
 
-  const itemTransform = `1 0 0 0 1 0 0 0 1 ${BED_CENTER.x} ${BED_CENTER.y} 0`;
+  const items = layout
+    .map(
+      (p) =>
+        `  <item objectid="${asmId}" transform="1 0 0 0 1 0 0 0 1 ${fmt(p.tx)} ${fmt(p.ty)} 0" printable="1"/>`,
+    )
+    .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">
@@ -64,12 +108,12 @@ ${components}
   </object>
  </resources>
  <build>
-  <item objectid="${asmId}" transform="${itemTransform}" printable="1"/>
+${items}
  </build>
 </model>`;
 }
 
-function modelSettingsXml(model: BadgeModel, name: string): string {
+function modelSettingsXml(model: BadgeModel, name: string, count: number): string {
   const asmId = model.meshes.length + 1;
   const parts = model.meshes
     .map(
@@ -80,6 +124,20 @@ function modelSettingsXml(model: BadgeModel, name: string): string {
     </part>`,
     )
     .join('\n');
+
+  const instances = Array.from(
+    { length: count },
+    (_, k) => `    <model_instance>
+      <metadata key="object_id" value="${asmId}"/>
+      <metadata key="instance_id" value="${k}"/>
+    </model_instance>`,
+  ).join('\n');
+
+  const assembleItems = Array.from(
+    { length: count },
+    (_, k) =>
+      `   <assemble_item object_id="${asmId}" instance_id="${k}" transform="${IDENTITY}" offset="0 0 0" />`,
+  ).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <config>
@@ -92,13 +150,10 @@ ${parts}
     <metadata key="plater_id" value="1"/>
     <metadata key="plater_name" value=""/>
     <metadata key="locked" value="false"/>
-    <model_instance>
-      <metadata key="object_id" value="${asmId}"/>
-      <metadata key="instance_id" value="0"/>
-    </model_instance>
+${instances}
   </plate>
   <assemble>
-   <assemble_item object_id="${asmId}" instance_id="0" transform="${IDENTITY}" offset="0 0 0" />
+${assembleItems}
   </assemble>
 </config>`;
 }
@@ -130,13 +185,15 @@ const SLICE_INFO = `<?xml version="1.0" encoding="UTF-8"?>
   </header>
 </config>`;
 
-/** Assemble a Bambu Studio-compatible .3mf as a Blob. */
-export function buildThreeMf(model: BadgeModel, name: string): Blob {
+/** Assemble a Bambu Studio-compatible .3mf as a Blob, with `count` copies. */
+export function buildThreeMf(model: BadgeModel, name: string, count = 1): Blob {
+  const n = Math.max(1, Math.floor(count));
+  const layout = computeLayout(model, n);
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(CONTENT_TYPES),
     '_rels/.rels': strToU8(RELS),
-    '3D/3dmodel.model': strToU8(modelXml(model, name)),
-    'Metadata/model_settings.config': strToU8(modelSettingsXml(model, name)),
+    '3D/3dmodel.model': strToU8(modelXml(model, name, layout)),
+    'Metadata/model_settings.config': strToU8(modelSettingsXml(model, name, n)),
     'Metadata/project_settings.config': strToU8(projectSettingsXml(model.filamentColors)),
     'Metadata/slice_info.config': strToU8(SLICE_INFO),
   };

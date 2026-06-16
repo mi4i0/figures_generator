@@ -4,7 +4,7 @@ import { svgToParts } from './svgToParts';
 import { buildBadge } from './badgeBuilder';
 import { buildThreeMf } from './threeMf';
 import { Viewer } from './viewer';
-import type { BadgeModel, BadgeSettings } from './types';
+import type { BadgeModel, BadgeSettings, MountType } from './types';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -15,10 +15,16 @@ const $ = <T extends HTMLElement>(id: string): T => {
 const sidcInput = $<HTMLInputElement>('sidc');
 const affiliationSel = $<HTMLSelectElement>('affiliation');
 const sizeInput = $<HTMLInputElement>('size');
+const countInput = $<HTMLInputElement>('count');
 const baseInput = $<HTMLInputElement>('baseThickness');
 const lineInput = $<HTMLInputElement>('lineHeight');
+const mountSel = $<HTMLSelectElement>('mount');
 const magDiaInput = $<HTMLInputElement>('magnetDia');
 const magDepthInput = $<HTMLInputElement>('magnetDepth');
+const pegWidthInput = $<HTMLInputElement>('pegWidth');
+const pegLengthInput = $<HTMLInputElement>('pegLength');
+const pegHeightInput = $<HTMLInputElement>('pegHeight');
+const baseBridgeInput = $<HTMLInputElement>('baseBridge');
 const svgPreview = $<HTMLDivElement>('svgPreview');
 const statusEl = $<HTMLParagraphElement>('status');
 const downloadBtn = $<HTMLButtonElement>('download');
@@ -33,9 +39,24 @@ function readSettings(): BadgeSettings {
     sizeMm: clamp(parseFloat(sizeInput.value), 5, 120, 25),
     baseThickness: clamp(parseFloat(baseInput.value), 0.4, 10, 2.4),
     lineHeight: clamp(parseFloat(lineInput.value), 0.1, 5, 0.6),
-    magnetDia: clamp(parseFloat(magDiaInput.value), 0, 40, 8.2),
-    magnetDepth: clamp(parseFloat(magDepthInput.value), 0, 8, 2.2),
+    mount: mountSel.value as MountType,
+    magnetDia: clamp(parseFloat(magDiaInput.value), 0, 40, 8.15),
+    magnetDepth: clamp(parseFloat(magDepthInput.value), 0, 8, 2),
+    pegWidth: clamp(parseFloat(pegWidthInput.value), 0.5, 20, 2.5),
+    pegLength: clamp(parseFloat(pegLengthInput.value), 1, 80, 30),
+    pegHeight: clamp(parseFloat(pegHeightInput.value), 0.4, 12, 2.5),
+    baseBridge: clamp(parseFloat(baseBridgeInput.value), 0, 6, 1.2),
   };
+}
+
+function syncMountFields(): void {
+  const mount = mountSel.value;
+  for (const el of document.querySelectorAll('.mount-magnet')) {
+    el.toggleAttribute('hidden', mount !== 'magnet');
+  }
+  for (const el of document.querySelectorAll('.mount-peg')) {
+    el.toggleAttribute('hidden', mount !== 'peg');
+  }
 }
 
 function clamp(v: number, lo: number, hi: number, fallback: number): number {
@@ -85,11 +106,13 @@ function sanitize(sidc: string): string {
 
 function download(): void {
   if (!currentModel) return;
-  const blob = buildThreeMf(currentModel, currentName);
+  const count = clamp(Math.round(parseFloat(countInput.value)), 1, 500, 1);
+  const blob = buildThreeMf(currentModel, currentName, count);
+  const suffix = count > 1 ? `_x${count}` : '';
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${currentName}.3mf`;
+  a.download = `${currentName}${suffix}.3mf`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -108,9 +131,19 @@ affiliationSel.addEventListener('change', () => {
   scheduleRegenerate();
 });
 
-for (const el of [sidcInput, sizeInput, baseInput, lineInput, magDiaInput, magDepthInput]) {
+mountSel.addEventListener('change', () => {
+  syncMountFields();
+  scheduleRegenerate();
+});
+
+for (const el of [
+  sidcInput, sizeInput, baseInput, lineInput,
+  magDiaInput, magDepthInput, pegWidthInput, pegLengthInput, pegHeightInput,
+  baseBridgeInput,
+]) {
   el.addEventListener('input', scheduleRegenerate);
 }
 downloadBtn.addEventListener('click', download);
 
+syncMountFields();
 regenerate();

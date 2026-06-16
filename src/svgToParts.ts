@@ -38,6 +38,8 @@ type ClipperPt = { X: number; Y: number };
 const childsOf = (node: any): any[] => (typeof node.Childs === 'function' ? node.Childs() : node.m_Childs ?? []);
 const contourOf = (node: any): ClipperPt[] => (typeof node.Contour === 'function' ? node.Contour() : node.m_polygon ?? []);
 const toPt = (p: ClipperPt): Pt => ({ x: p.X / CLIPPER_SCALE, y: p.Y / CLIPPER_SCALE });
+const toClipperPath = (ring: Pt[]): ClipperPt[] =>
+  ring.map((p) => ({ X: Math.round(p.x * CLIPPER_SCALE), Y: Math.round(p.y * CLIPPER_SCALE) }));
 
 function walkPolyTree(node: any, out: Poly[]): void {
   // In a Clipper PolyTree, a node's direct children are the opposite type to it
@@ -75,6 +77,57 @@ function strokeToPolys(points: Pt[], strokeWidth: number, closed: boolean): Poly
 
   const polys: Poly[] = [];
   walkPolyTree(tree, polys);
+  return polys;
+}
+
+/** Offset a set of closed polygons (with holes) by a scaled delta. */
+function offsetClosed(polys: Poly[], deltaScaled: number): Poly[] {
+  const co = new ClipperLib.ClipperOffset(2, 0.25 * CLIPPER_SCALE);
+  for (const poly of polys) {
+    co.AddPath(toClipperPath(poly.outer), ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
+    for (const hole of poly.holes) {
+      co.AddPath(toClipperPath(hole), ClipperLib.JoinType.jtRound, ClipperLib.EndType.etClosedPolygon);
+    }
+  }
+  const tree = new ClipperLib.PolyTree();
+  co.Execute(tree, deltaScaled);
+  const out: Poly[] = [];
+  walkPolyTree(tree, out);
+  return out;
+}
+
+/**
+ * Union every part polygon into a single base outline and, optionally, apply a
+ * morphological closing (dilate then erode by `bridgeUnits`). The closing
+ * connects amplifier marks that milsymbol draws detached from the frame —
+ * echelon (above), mobility / towed array (below), and HQ / task force / dummy
+ * markers — so they all share one printable base instead of floating.
+ */
+export function buildBaseOutline(parts: RawPart[], bridgeUnits: number): Poly[] {
+  const clipper = new ClipperLib.Clipper();
+  for (const part of parts) {
+    for (const poly of part.polys) {
+      clipper.AddPath(toClipperPath(poly.outer), ClipperLib.PolyType.ptSubject, true);
+      for (const hole of poly.holes) {
+        clipper.AddPath(toClipperPath(hole), ClipperLib.PolyType.ptSubject, true);
+      }
+    }
+  }
+  const unionTree = new ClipperLib.PolyTree();
+  clipper.Execute(
+    ClipperLib.ClipType.ctUnion,
+    unionTree,
+    ClipperLib.PolyFillType.pftNonZero,
+    ClipperLib.PolyFillType.pftNonZero,
+  );
+  let polys: Poly[] = [];
+  walkPolyTree(unionTree, polys);
+
+  if (bridgeUnits > 0) {
+    const d = bridgeUnits * CLIPPER_SCALE;
+    polys = offsetClosed(polys, d); // dilate: merge nearby pieces
+    polys = offsetClosed(polys, -d); // erode: restore outer silhouette
+  }
   return polys;
 }
 

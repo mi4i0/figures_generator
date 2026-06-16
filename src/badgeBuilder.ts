@@ -3,6 +3,7 @@ import {
   mergeGeometries,
   mergeVertices,
 } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { buildBaseOutline } from './svgToParts';
 import type { BadgeModel, BadgeSettings, PartMesh, Poly, RawPart, SvgParts } from './types';
 
 const BLACK = '#000000';
@@ -133,10 +134,11 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
 
   const meshes: PartMesh[] = [];
 
-  // Base plate: every fill that uses the frame color.
-  const basePolys = parts
-    .filter((p) => p.role === 'fill' && p.color === frameColor)
-    .flatMap((p) => p.polys);
+  // Base plate: union of ALL geometry, closed so detached amplifier marks
+  // (echelon, mobility/towed array, HQ/task force/dummy) get a connected base
+  // instead of floating above the build plate. Closing distance is in SVG units.
+  const bridgeUnits = settings.baseBridge > 0 ? settings.baseBridge / s : 0;
+  const basePolys = buildBaseOutline(parts, bridgeUnits);
   const base = buildMesh('base', basePolys, map, 0, settings.baseThickness, 1);
   if (base) meshes.push(base);
 
@@ -162,8 +164,9 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
     if (mesh) meshes.push(mesh);
   }
 
-  // Magnet recess (negative part) cut into the back, centered on the footprint.
-  if (settings.magnetDia > 0 && settings.magnetDepth > 0) {
+  // Mounting feature.
+  if (settings.mount === 'magnet' && settings.magnetDia > 0 && settings.magnetDepth > 0) {
+    // Recess (negative part) cut into the back, centered on the footprint.
     const cyl = new THREE.CylinderGeometry(
       settings.magnetDia / 2,
       settings.magnetDia / 2,
@@ -175,6 +178,26 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
     cyl.deleteAttribute('uv');
     cyl.deleteAttribute('normal');
     meshes.push(toPartMesh('magnet', cyl, 1, 'negative_part'));
+  } else if (
+    settings.mount === 'peg' &&
+    settings.pegWidth > 0 &&
+    settings.pegLength > 0 &&
+    settings.pegHeight > 0
+  ) {
+    // Stand peg ("палочка"): a rod protruding below the FULL footprint (so it
+    // clears mobility/towed-array marks) to plug into a separately-printed base.
+    // It runs in the badge plane; its TOP reaches the badge center (y=0), always
+    // inside the frame fill, so it fuses with the base even when the lowest
+    // geometry is an off-center amplifier mark. Z is its own height, resting on
+    // the build plate (z=0) so badge + peg print flat as one solid piece.
+    const bottomEdge = map(cx, bbox.maxY)[1]; // lowest footprint point, in mm (negative)
+    const pegBottom = bottomEdge - settings.pegLength; // tip protrudes pegLength below
+    const lengthY = 0 - pegBottom; // from y=0 (center) down to the tip
+    const peg = new THREE.BoxGeometry(settings.pegWidth, lengthY, settings.pegHeight);
+    peg.translate(0, pegBottom / 2, settings.pegHeight / 2);
+    peg.deleteAttribute('uv');
+    peg.deleteAttribute('normal');
+    meshes.push(toPartMesh('peg', peg, 1, 'normal_part'));
   }
 
   return { meshes, filamentColors, sizeMm: settings.sizeMm };

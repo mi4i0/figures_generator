@@ -32,8 +32,18 @@ src/
   shape milsymbol emits (circle / rectangle / rhombus / square / quatrefoil).
 - **Filament slots**: 1 = frame color, 2 = black, 3 = spare/extra. Slot 1 is the largest-area
   fill color (auto-detected in `badgeBuilder.detectFrameColor`).
-- **Magnet recess**: emitted as a Bambu `negative_part` cylinder — the slicer subtracts it,
-  so no browser CSG. Default ⌀8.2 × 2.2 mm.
+- **Base plate**: `buildBaseOutline` (in `svgToParts.ts`) = clipper Union of ALL part polygons,
+  then a morphological closing (dilate+erode by `baseBridge` mm) so detached amplifier marks
+  (echelon above, mobility/towed below, HQ/TF/dummy around) connect into ONE printable base.
+- **Mounting** (`settings.mount`): `'magnet'` = `negative_part` cylinder recess in the back
+  (slicer subtracts it, no browser CSG; default ⌀8.2 × 2.2 mm); `'peg'` = a `normal_part` post
+  ("палочка") at the bottom-center of the FULL footprint (below mobility/towed marks), in-plane
+  and full base thickness so badge+peg print flat as one piece for standing in a base;
+  `'none'` = neither. Magnet and peg are mutually exclusive.
+- **Copies**: `buildThreeMf(model, name, count)` lays out `count` copies in a centered grid
+  (`computeLayout`, spacing from the real mesh XY bbox + `COPY_GAP`) as repeated `<item>` /
+  `<model_instance>` / `<assemble_item>` — meshes are defined once, so the file barely grows.
+  Count affects only the downloaded file, not the 3D preview.
 - **3MF structure**: `3D/3dmodel.model` (one assembly `<object>` whose `<components>` reference
   N per-part `<object>` meshes) + `Metadata/model_settings.config` (per-part extruder/subtype)
   + patched `project_settings.config`. All files must be well-formed XML.

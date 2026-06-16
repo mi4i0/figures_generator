@@ -36,6 +36,46 @@
               <span>Розмір, мм</span>
               <input id="size" type="number" min="10" max="80" step="1" value="25" />
             </label>
+
+            <label class="field">
+              <span>Кількість, шт</span>
+              <input id="count" type="number" min="1" max="200" step="1" value="1" />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Кріплення</span>
+            <select id="mount">
+              <option value="magnet">Магніт (заглиблення ззаду)</option>
+              <option value="peg">Палочка (на підставку)</option>
+              <option value="none">Без кріплення</option>
+            </select>
+          </label>
+
+          <div class="row mount-magnet">
+            <label class="field">
+              <span>Магніт ⌀, мм</span>
+              <input id="magnetDia" type="number" min="0" max="20" step="0.05" value="8.15" />
+            </label>
+            <label class="field">
+              <span>Магніт глибина, мм</span>
+              <input id="magnetDepth" type="number" min="0" max="4" step="0.1" value="2" />
+            </label>
+          </div>
+
+          <div class="row mount-peg" hidden>
+            <label class="field">
+              <span>Палочка ширина, мм</span>
+              <input id="pegWidth" type="number" min="1" max="12" step="0.1" value="2.5" />
+            </label>
+            <label class="field">
+              <span>Палочка довжина, мм</span>
+              <input id="pegLength" type="number" min="2" max="60" step="0.5" value="30" />
+            </label>
+            <label class="field">
+              <span>Палочка висота, мм</span>
+              <input id="pegHeight" type="number" min="0.4" max="10" step="0.1" value="2.5" />
+            </label>
           </div>
 
           <details class="advanced">
@@ -52,12 +92,8 @@
             </div>
             <div class="row">
               <label class="field">
-                <span>Магніт ⌀, мм</span>
-                <input id="magnetDia" type="number" min="0" max="20" step="0.1" value="8.2" />
-              </label>
-              <label class="field">
-                <span>Магніт глибина, мм</span>
-                <input id="magnetDepth" type="number" min="0" max="4" step="0.1" value="2.2" />
+                <span>Перемичка основи, мм</span>
+                <input id="baseBridge" type="number" min="0" max="4" step="0.1" value="1.2" />
               </label>
             </div>
           </details>
@@ -77,7 +113,7 @@
           <div class="preview3d">
             <h2>3D</h2>
             <div id="viewer"></div>
-            <p class="hint">Заглиблення під магніт показано напівпрозорим — вирізається у слайсері.</p>
+            <p class="hint">Магніт: заглиблення показано напівпрозорим (вирізається у слайсері). Палочка: суцільний виступ знизу.</p>
           </div>
         </section>
       </main>
