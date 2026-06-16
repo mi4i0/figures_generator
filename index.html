@@ -36,13 +36,13 @@
           <label class="field">
             <span>Кріплення</span>
             <select id="mount">
+              <option value="none" selected>Без кріплення</option>
               <option value="magnet">Магніт (заглиблення ззаду)</option>
               <option value="peg">Палочка (на підставку)</option>
-              <option value="none">Без кріплення</option>
             </select>
           </label>
 
-          <div class="row mount-magnet">
+          <div class="row mount-magnet" hidden>
             <label class="field">
               <span>Магніт ⌀, мм</span>
               <input id="magnetDia" type="number" min="0" max="20" step="0.05" value="8.15" />

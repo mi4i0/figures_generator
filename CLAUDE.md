@@ -14,7 +14,8 @@ npm run build    # tsc --noEmit && vite build (always run before marking work do
 ```
 src/
   symbol.ts       — SIDC → SVG (milsymbol). normalizeSidc() strips hyphens/spaces.
-  svgToParts.ts   — SVG fills → polygons; strokes → clipper-lib outlines. Shape-agnostic.
+  svgToParts.ts   — SVG fills → polygons; strokes → clipper-lib outlines; <text> → glyphs. Shape-agnostic.
+  text.ts         — <text> amplifiers → filled glyph polys via bundled helvetiker_bold font.
   badgeBuilder.ts — Scales to mm, extrudes parts, adds negative-cylinder magnet recess.
   threeMf.ts      — Writes Bambu-compatible .3mf zip via fflate.
   viewer.ts       — three.js OrbitControls 3D preview.
@@ -31,7 +32,20 @@ src/
 - **Shape-agnostic geometry**: never assume a circular frame. `svgToParts` works on whatever
   shape milsymbol emits (circle / rectangle / rhombus / square / quatrefoil).
 - **Filament slots**: 1 = frame color, 2 = black, 3 = spare/extra. Slot 1 is the largest-area
-  fill color (auto-detected in `badgeBuilder.detectFrameColor`).
+  NON-BLACK fill color (auto-detected in `badgeBuilder.detectFrameColor`). Black fills are icon
+  elements (cross, arrow…), never the frame. Stroke-only frames (e.g. medical white badges)
+  have no fill → slot 1 falls back to white (`#ffffff`).
+- **Text amplifiers**: milsymbol draws entity letters / designations as `<text>` (e.g. "MEP",
+  "EPW"). `SVGLoader` ignores `<text>`, so `svgToParts` re-parses them (`parseTextElements`) and
+  `text.ts` turns each into filled black glyph polygons via the bundled `helvetiker_bold` font,
+  centered on the `x`/`y` anchor (matches milsymbol's middle/middle). Shrunk by `SIZE_SAFETY`
+  (0.9), then clamped to `maxTextWidth` (frame width × 0.88, captured BEFORE text is added to
+  the bbox) so wider labels (e.g. "TCP"/"EPW" at font-size 35) scale down uniformly to stay
+  inside the frame instead of poking out the sides. They extrude as raised black (slot 2).
+- **Base never includes fills**: `buildBaseOutline` skips ALL fill parts (frame fill is added
+  explicitly; icon/text fills are raised features whose winding would punch holes in the base).
+  When there's no frame fill it synthesizes the base from the outer contour of the largest
+  closed stroke polygon (the frame ring).
 - **Base plate**: `buildBaseOutline` (in `svgToParts.ts`) = frame fill + a SOLID rectangle behind
   each external amplifier group (echelon above / mobility/towed below the frame box, classified by
   each mark's center-Y), unioned and lightly closed (`baseBridge`). The solid rects give a

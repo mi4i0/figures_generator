@@ -21,19 +21,23 @@ function polyArea(poly: Poly): number {
   return ring(poly.outer) - poly.holes.reduce((s, h) => s + ring(h), 0);
 }
 
-/** Pick the fill color covering the largest area — that's the frame/base. */
+/** Pick the fill color covering the largest area — that's the frame/base.
+ *  Black fills are icon elements (cross, arrow, etc.), not the frame, so we skip them.
+ *  If no non-black fill exists the frame is stroke-only (e.g. medical white frame);
+ *  return white so the base plate gets a white filament slot. */
 function detectFrameColor(parts: RawPart[]): string {
   let best = '';
   let bestArea = -1;
   for (const part of parts) {
     if (part.role !== 'fill') continue;
+    if (part.color === BLACK) continue;
     const area = part.polys.reduce((s, p) => s + polyArea(p), 0);
     if (area > bestArea) {
       bestArea = area;
       best = part.color;
     }
   }
-  return best || '#0061c1';
+  return best || '#ffffff';
 }
 
 /** Build a THREE.Shape from a Poly using the SVG->mm transform. */

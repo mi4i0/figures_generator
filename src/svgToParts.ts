@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
 import ClipperLib from 'clipper-lib';
+import { textToPolys } from './text';
 import type { Poly, Pt, RawPart, SvgParts } from './types';
 
 const CURVE_DIVISIONS = 48;
@@ -103,6 +104,16 @@ interface Box {
   maxY: number;
 }
 
+function ringArea(pts: Pt[]): number {
+  let a = 0;
+  for (let i = 0, n = pts.length; i < n; i++) {
+    const p = pts[i];
+    const q = pts[(i + 1) % n];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return Math.abs(a) / 2;
+}
+
 function boxOf(polys: Poly[]): Box | null {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const poly of polys) {
@@ -152,8 +163,32 @@ export function buildBaseOutline(
   for (const part of parts) {
     if (part.role === 'fill' && part.color === frameColor) framePolys.push(...part.polys);
   }
-  const frameBox = boxOf(framePolys);
 
+  // When the frame has no fill (stroke-only, e.g. medical white badges) synthesize the
+  // base shape from the outer boundary of the largest closed stroke polygon.  The outer
+  // contour of a ring stroke approximates the frame interior + half stroke-width.
+  if (framePolys.length === 0) {
+    let bestArea = -1;
+    let bestPoly: Poly | null = null;
+    for (const part of parts) {
+      if (part.role !== 'stroke') continue;
+      for (const poly of part.polys) {
+        const a = ringArea(poly.outer);
+        if (a > bestArea) { bestArea = a; bestPoly = poly; }
+      }
+    }
+    if (bestPoly) {
+      framePolys.push({ outer: bestPoly.outer, holes: [] });
+    } else {
+      // Absolute fallback: bounding rect of all geometry.
+      const all: Poly[] = [];
+      for (const part of parts) all.push(...part.polys);
+      const b = boxOf(all);
+      if (b) framePolys.push(rectPoly(b));
+    }
+  }
+
+  const frameBox = boxOf(framePolys);
   const basePolys: Poly[] = [...framePolys];
   let above: Box | null = null;
   let below: Box | null = null;
@@ -164,7 +199,9 @@ export function buildBaseOutline(
     const connect = frameH * 0.06; // overlap back into the frame
 
     for (const part of parts) {
-      if (part.role === 'fill' && part.color === frameColor) continue;
+      // Skip fills entirely: frame fill is already in basePolys; icon fills (cross, etc.)
+      // are raised features and must NOT enter the base union (wrong winding → holes).
+      if (part.role === 'fill') continue;
       for (const poly of part.polys) {
         const b = boxOf([poly]);
         if (!b) continue;
@@ -281,5 +318,44 @@ export function svgToParts(svgString: string): SvgParts {
     }
   }
 
+  // <text> amplifiers (entity letters, designations) — SVGLoader skips these, so we
+  // rebuild them from a bundled vector font into filled black glyph polygons. Text is
+  // processed last, so `bbox` here spans only the frame/icon geometry; use its width to
+  // keep glyphs inside the frame (helvetiker bold is wider than milsymbol's Arial).
+  const frameWidth = bbox.maxX - bbox.minX;
+  const maxTextWidth = Number.isFinite(frameWidth) ? frameWidth * 0.88 : Infinity;
+  for (const el of parseTextElements(svgString)) {
+    const polys = textToPolys(el.text, el.x, el.y, el.size, maxTextWidth);
+    if (polys.length === 0) continue;
+    pushPart(map, el.color, 'fill', polys);
+    updateBbox(bbox, polys);
+  }
+
   return { parts: [...map.values()], bbox };
+}
+
+interface TextElement {
+  text: string;
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+}
+
+/** Pull <text> runs out of the milsymbol SVG (x, y, font-size, fill, content). */
+function parseTextElements(svgString: string): TextElement[] {
+  const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+  const out: TextElement[] = [];
+  for (const node of Array.from(doc.querySelectorAll('text'))) {
+    const text = node.textContent?.trim();
+    if (!text) continue;
+    out.push({
+      text,
+      x: parseFloat(node.getAttribute('x') ?? '0') || 0,
+      y: parseFloat(node.getAttribute('y') ?? '0') || 0,
+      size: parseFloat(node.getAttribute('font-size') ?? '12') || 12,
+      color: normalizeColor(node.getAttribute('fill')) ?? '#000000',
+    });
+  }
+  return out;
 }

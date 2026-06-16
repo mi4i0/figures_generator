@@ -89,8 +89,7 @@ function regenerate(): void {
     currentName = sanitize(sidc);
     viewer.setModel(model);
 
-    const colorCount = new Set(model.meshes.map((m) => m.extruder)).size;
-    setStatus(`Готово: ${model.meshes.length} частин, ${colorCount} кольори`, 'ok');
+    setStatus('', 'ok');
     downloadBtn.disabled = false;
   } catch (err) {
     console.error(err);

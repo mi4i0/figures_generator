@@ -56,7 +56,7 @@ export const DEFAULT_SETTINGS: BadgeSettings = {
   sizeMm: 25,
   baseThickness: 2.4,
   lineHeight: 0.6,
-  mount: 'magnet',
+  mount: 'none',
   magnetDia: 8.15,
   magnetDepth: 2,
   pegWidth: 2.5,
