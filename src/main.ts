@@ -13,7 +13,9 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 
 const sidcInput = $<HTMLInputElement>('sidc');
-const sizeInput = $<HTMLInputElement>('size');
+const diameterInput = $<HTMLInputElement>('diameter');
+const widthInput = $<HTMLInputElement>('width');
+const heightInput = $<HTMLInputElement>('height');
 const countInput = $<HTMLInputElement>('count');
 const baseInput = $<HTMLInputElement>('baseThickness');
 const lineInput = $<HTMLInputElement>('lineHeight');
@@ -33,9 +35,10 @@ const viewer = new Viewer($('viewer'));
 let currentModel: BadgeModel | null = null;
 let currentName = 'badge';
 
-function readSettings(): BadgeSettings {
+function readSettings(widthMm: number, heightMm: number): BadgeSettings {
   return {
-    sizeMm: clamp(parseFloat(sizeInput.value), 5, 120, 25),
+    widthMm,
+    heightMm,
     baseThickness: clamp(parseFloat(baseInput.value), 0.4, 10, 2.4),
     lineHeight: clamp(parseFloat(lineInput.value), 0.1, 5, 0.6),
     mount: mountSel.value as MountType,
@@ -57,6 +60,20 @@ function syncMountFields(): void {
     el.toggleAttribute('hidden', mount !== 'peg');
   }
 }
+
+/** Show the diameter field for round frames, width+height for everything else. */
+function syncSizeFields(isRound: boolean): void {
+  for (const el of document.querySelectorAll('.size-round')) {
+    el.toggleAttribute('hidden', !isRound);
+  }
+  for (const el of document.querySelectorAll('.size-rect')) {
+    el.toggleAttribute('hidden', isRound);
+  }
+}
+
+// The height field auto-follows the symbol's natural aspect ratio until the user
+// edits it; editing the SIDC re-enables the auto behavior.
+let userSetHeight = false;
 
 function clamp(v: number, lo: number, hi: number, fallback: number): number {
   if (!Number.isFinite(v)) return fallback;
@@ -84,7 +101,26 @@ function regenerate(): void {
       return;
     }
 
-    const model = buildBadge(parts, readSettings());
+    syncSizeFields(parts.isRound);
+
+    let widthMm: number;
+    let heightMm: number;
+    if (parts.isRound) {
+      widthMm = heightMm = clamp(parseFloat(diameterInput.value), 5, 120, 25);
+    } else {
+      widthMm = clamp(parseFloat(widthInput.value), 5, 120, 25);
+      const bw = parts.bbox.maxX - parts.bbox.minX;
+      const bh = parts.bbox.maxY - parts.bbox.minY;
+      const aspect = bw > 0 ? bh / bw : 1;
+      if (userSetHeight) {
+        heightMm = clamp(parseFloat(heightInput.value), 5, 120, Math.round(widthMm * aspect));
+      } else {
+        heightMm = Math.round(widthMm * aspect);
+        heightInput.value = String(heightMm);
+      }
+    }
+
+    const model = buildBadge(parts, readSettings(widthMm, heightMm));
     currentModel = model;
     currentName = sanitize(sidc);
     viewer.setModel(model);
@@ -126,8 +162,19 @@ mountSel.addEventListener('change', () => {
   scheduleRegenerate();
 });
 
+// Editing the SIDC switches symbols → let height auto-follow the new aspect again.
+sidcInput.addEventListener('input', () => {
+  userSetHeight = false;
+  scheduleRegenerate();
+});
+// Manually editing height locks it against auto-aspect until the SIDC changes.
+heightInput.addEventListener('input', () => {
+  userSetHeight = true;
+  scheduleRegenerate();
+});
+
 for (const el of [
-  sidcInput, sizeInput, baseInput, lineInput,
+  diameterInput, widthInput, baseInput, lineInput,
   magDiaInput, magDepthInput, pegWidthInput, pegLengthInput, pegHeightInput,
   baseBridgeInput,
 ]) {

@@ -94,7 +94,10 @@ function toPartMesh(
   extruder: number,
   subtype: PartMesh['subtype'],
 ): PartMesh {
-  const indexed = mergeVertices(raw);
+  // Use a tight epsilon so only truly duplicate vertices within one extrusion
+  // are merged. The default (1e-4) is large enough to accidentally join boundary
+  // vertices of adjacent shapes (e.g. letter outlines) → T-junctions → non-manifold.
+  const indexed = mergeVertices(raw, 1e-6);
   const pos = indexed.getAttribute('position').array as Float32Array;
   const idx = indexed.getIndex();
   const triangles = idx
@@ -120,10 +123,20 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
   const width = bbox.maxX - bbox.minX;
   const height = bbox.maxY - bbox.minY;
   const maxDim = Math.max(width, height) || 1;
-  const s = settings.sizeMm / maxDim;
+  // Round frames scale uniformly (diameter == widthMm) so they stay circular;
+  // other shapes scale per-axis so width and height are honored independently.
+  let sx: number;
+  let sy: number;
+  if (svg.isRound) {
+    sx = sy = settings.widthMm / maxDim;
+  } else {
+    sx = settings.widthMm / (width || 1);
+    sy = settings.heightMm / (height || 1);
+  }
+  const s = (sx + sy) / 2; // average scale, for converting the mm-based base bridge
   const cx = (bbox.minX + bbox.maxX) / 2;
   const cy = (bbox.minY + bbox.maxY) / 2;
-  const map = (x: number, y: number): [number, number] => [(x - cx) * s, -(y - cy) * s];
+  const map = (x: number, y: number): [number, number] => [(x - cx) * sx, -(y - cy) * sy];
 
   const frameColor = detectFrameColor(parts);
 
@@ -206,5 +219,5 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
     meshes.push(toPartMesh('peg', peg, 1, 'normal_part'));
   }
 
-  return { meshes, filamentColors, sizeMm: settings.sizeMm };
+  return { meshes, filamentColors, sizeMm: Math.max(settings.widthMm, settings.heightMm) };
 }

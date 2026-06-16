@@ -22,9 +22,17 @@
           </label>
 
           <div class="row">
-            <label class="field">
-              <span>Розмір, мм</span>
-              <input id="size" type="number" min="10" max="80" step="1" value="25" />
+            <label class="field size-round">
+              <span>Діаметр, мм</span>
+              <input id="diameter" type="number" min="10" max="80" step="1" value="25" />
+            </label>
+            <label class="field size-rect" hidden>
+              <span>Ширина, мм</span>
+              <input id="width" type="number" min="10" max="80" step="1" value="25" />
+            </label>
+            <label class="field size-rect" hidden>
+              <span>Висота, мм</span>
+              <input id="height" type="number" min="10" max="80" step="1" value="25" />
             </label>
 
             <label class="field">

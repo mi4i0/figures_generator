@@ -26,6 +26,8 @@ export interface RawPart {
 export interface SvgParts {
   parts: RawPart[];
   bbox: { minX: number; minY: number; maxX: number; maxY: number };
+  /** True when the frame is (approximately) a circle — drives diameter-vs-W/H UI. */
+  isRound: boolean;
 }
 
 /** How the badge is mounted/displayed. */
@@ -33,8 +35,10 @@ export type MountType = 'magnet' | 'peg' | 'none';
 
 /** User-configurable physical parameters of the badge (millimeters). */
 export interface BadgeSettings {
-  /** Longest footprint dimension. */
-  sizeMm: number;
+  /** Target footprint width (X). For round frames width == height == diameter. */
+  widthMm: number;
+  /** Target footprint height (Y). */
+  heightMm: number;
   baseThickness: number;
   lineHeight: number;
   /** Mounting style: magnet recess, stand peg, or none. */
@@ -53,7 +57,8 @@ export interface BadgeSettings {
 }
 
 export const DEFAULT_SETTINGS: BadgeSettings = {
-  sizeMm: 25,
+  widthMm: 25,
+  heightMm: 25,
   baseThickness: 2.4,
   lineHeight: 0.6,
   mount: 'none',

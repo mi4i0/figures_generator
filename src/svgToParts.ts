@@ -114,6 +114,37 @@ function ringArea(pts: Pt[]): number {
   return Math.abs(a) / 2;
 }
 
+/**
+ * Decide whether the frame is (approximately) circular by testing the largest
+ * closed polygon's isoperimetric quotient Q = 4π·A / P². A circle gives Q ≈ 1.0;
+ * square/diamond ≈ 0.785; the (concave) quatrefoil is lower still. Genuine circles
+ * polygonize into many short segments, so we also require a high vertex count to
+ * avoid mistaking a coarse 4-point square for a circle.
+ */
+function detectRound(parts: RawPart[]): boolean {
+  let best: Pt[] | null = null;
+  let bestArea = 0;
+  for (const part of parts) {
+    for (const poly of part.polys) {
+      const a = ringArea(poly.outer);
+      if (a > bestArea) {
+        bestArea = a;
+        best = poly.outer;
+      }
+    }
+  }
+  if (!best || best.length < 12 || bestArea <= 0) return false;
+  let perim = 0;
+  for (let i = 0, n = best.length; i < n; i++) {
+    const p = best[i];
+    const q = best[(i + 1) % n];
+    perim += Math.hypot(q.x - p.x, q.y - p.y);
+  }
+  if (perim <= 0) return false;
+  const quotient = (4 * Math.PI * bestArea) / (perim * perim);
+  return quotient > 0.9;
+}
+
 function boxOf(polys: Poly[]): Box | null {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const poly of polys) {
@@ -331,7 +362,8 @@ export function svgToParts(svgString: string): SvgParts {
     updateBbox(bbox, polys);
   }
 
-  return { parts: [...map.values()], bbox };
+  const parts = [...map.values()];
+  return { parts, bbox, isRound: detectRound(parts) };
 }
 
 interface TextElement {

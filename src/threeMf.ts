@@ -74,23 +74,34 @@ function computeLayout(model: BadgeModel, count: number): { tx: number; ty: numb
 
 function modelXml(model: BadgeModel, name: string, layout: { tx: number; ty: number }[]): string {
   const meshes = model.meshes;
-  const asmId = meshes.length + 1;
+  const N = meshes.length;
 
+  // Mesh objects — defined once, shared by all assembly copies via <component>.
   const objects = meshes
-    .map(
-      (mesh, i) =>
-        `  <object id="${i + 1}" type="model">\n${meshXml(mesh)}\n  </object>`,
-    )
+    .map((mesh, i) => `  <object id="${i + 1}" type="model">\n${meshXml(mesh)}\n  </object>`)
     .join('\n');
 
   const components = meshes
     .map((_, i) => `    <component objectid="${i + 1}" transform="${IDENTITY}"/>`)
     .join('\n');
 
+  // Each copy gets its own assembly object so Bambu Studio assigns filament colors
+  // independently per copy (shared single-assembly approach only colors copy 0).
+  const assemblies = layout
+    .map((_, k) => {
+      const asmId = N + 1 + k;
+      return `  <object id="${asmId}" type="model">
+   <components>
+${components}
+   </components>
+  </object>`;
+    })
+    .join('\n');
+
   const items = layout
     .map(
-      (p) =>
-        `  <item objectid="${asmId}" transform="1 0 0 0 1 0 0 0 1 ${fmt(p.tx)} ${fmt(p.ty)} 0" printable="1"/>`,
+      (p, k) =>
+        `  <item objectid="${N + 1 + k}" transform="1 0 0 0 1 0 0 0 1 ${fmt(p.tx)} ${fmt(p.ty)} 0" printable="1"/>`,
     )
     .join('\n');
 
@@ -101,11 +112,7 @@ function modelXml(model: BadgeModel, name: string, layout: { tx: number; ty: num
  <metadata name="Title">${esc(name)}</metadata>
  <resources>
 ${objects}
-  <object id="${asmId}" type="model">
-   <components>
-${components}
-   </components>
-  </object>
+${assemblies}
  </resources>
  <build>
 ${items}
@@ -114,7 +121,7 @@ ${items}
 }
 
 function modelSettingsXml(model: BadgeModel, name: string, count: number): string {
-  const asmId = model.meshes.length + 1;
+  const N = model.meshes.length;
   const parts = model.meshes
     .map(
       (mesh, i) => `    <part id="${i + 1}" subtype="${mesh.subtype}">
@@ -125,27 +132,33 @@ function modelSettingsXml(model: BadgeModel, name: string, count: number): strin
     )
     .join('\n');
 
+  // Each copy has its own assembly object → its own extruder config block.
+  const objects = Array.from(
+    { length: count },
+    (_, k) => `  <object id="${N + 1 + k}">
+    <metadata key="name" value="${esc(name)}"/>
+    <metadata key="extruder" value="1"/>
+${parts}
+  </object>`,
+  ).join('\n');
+
   const instances = Array.from(
     { length: count },
     (_, k) => `    <model_instance>
-      <metadata key="object_id" value="${asmId}"/>
-      <metadata key="instance_id" value="${k}"/>
+      <metadata key="object_id" value="${N + 1 + k}"/>
+      <metadata key="instance_id" value="0"/>
     </model_instance>`,
   ).join('\n');
 
   const assembleItems = Array.from(
     { length: count },
     (_, k) =>
-      `   <assemble_item object_id="${asmId}" instance_id="${k}" transform="${IDENTITY}" offset="0 0 0" />`,
+      `   <assemble_item object_id="${N + 1 + k}" instance_id="0" transform="${IDENTITY}" offset="0 0 0" />`,
   ).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <config>
-  <object id="${asmId}">
-    <metadata key="name" value="${esc(name)}"/>
-    <metadata key="extruder" value="1"/>
-${parts}
-  </object>
+${objects}
   <plate>
     <metadata key="plater_id" value="1"/>
     <metadata key="plater_name" value=""/>
