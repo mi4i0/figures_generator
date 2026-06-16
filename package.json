@@ -1,0 +1,22 @@
+{
+  "name": "figures-generator",
+  "version": "0.1.0",
+  "description": "Generate 3D-printable NATO APP-6D symbol badges (.3mf) from a SIDC",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "clipper-lib": "^6.4.2",
+    "fflate": "^0.8.2",
+    "milsymbol": "^3.0.2",
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
