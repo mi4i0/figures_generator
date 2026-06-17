@@ -67,6 +67,19 @@ export function sidcToSvg(sidc: string, size = 100): SymbolResult {
 }
 
 /**
+ * The 2-digit APP-6D symbol set (digits 5-6, 0-based index 4-5). E.g. "10" =
+ * Land unit, "15" = Land equipment, "20" = Land installation, "01" = Air.
+ */
+export function symbolSet(sidc: string): string {
+  return normalizeSidc(sidc).slice(4, 6);
+}
+
+/** True for the Land-equipment symbol set ("15"), which gets the mark-hugging base. */
+export function isLandEquipment(sidc: string): boolean {
+  return symbolSet(sidc) === '15';
+}
+
+/**
  * Patch the standard-identity (affiliation) digit of a 20-digit APP-6D SIDC.
  * Digit index 3 (0-based): 1=Unknown, 3=Friend, 4=Neutral, 6=Hostile.
  */

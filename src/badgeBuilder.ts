@@ -117,8 +117,15 @@ function toPartMesh(
  *  - the frame fill becomes the base plate,
  *  - all other colors (strokes + non-frame fills) are raised on the front,
  *  - a negative cylinder forms the magnet recess in the back.
+ *
+ * `hugAmplifiers` (Land equipment) makes the base trace each external amplifier
+ * mark's outline instead of backing it with a solid rectangle.
  */
-export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
+export function buildBadge(
+  svg: SvgParts,
+  settings: BadgeSettings,
+  hugAmplifiers = false,
+): BadgeModel {
   const { parts, bbox } = svg;
   const width = bbox.maxX - bbox.minX;
   const height = bbox.maxY - bbox.minY;
@@ -155,7 +162,7 @@ export function buildBadge(svg: SvgParts, settings: BadgeSettings): BadgeModel {
   // (echelon, mobility/towed array, HQ/task force/dummy) get a connected base
   // instead of floating above the build plate. Closing distance is in SVG units.
   const bridgeUnits = settings.baseBridge > 0 ? settings.baseBridge / s : 0;
-  const basePolys = buildBaseOutline(parts, bridgeUnits, frameColor);
+  const basePolys = buildBaseOutline(parts, bridgeUnits, frameColor, !hugAmplifiers);
   const base = buildMesh('base', basePolys, map, 0, settings.baseThickness, 1);
   if (base) meshes.push(base);
 

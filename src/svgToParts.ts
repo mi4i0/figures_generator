@@ -178,17 +178,23 @@ const rectPoly = (b: Box): Poly => ({
 /**
  * Build a single printable base outline.
  *
- * The frame fill forms the base. Amplifier marks that milsymbol draws OUTSIDE
- * the frame (echelon above, mobility / towed array below) are backed by a SOLID
- * rectangle spanning their extent and joined to the frame — so the background
- * there is continuous, not a gappy trace of the thin marks. Marks inside/around
- * the frame are unioned as-is. An optional morphological closing (`bridgeUnits`)
- * tidies any remaining slivers. (SVG y grows downward: smaller y = above.)
+ * The frame fill forms the base. Two strategies for external amplifier marks
+ * (echelon above the frame, mobility / towed array below it), chosen by
+ * `solidAmplifierBg`:
+ *  - `true` (default, e.g. Land unit): back each external group with a SOLID
+ *    rectangle spanning its extent and joined to the frame, so the background is
+ *    continuous instead of a gappy trace, and the bottom edge stays solid.
+ *  - `false` (Land equipment): the base hugs each mark's OWN outline — no solid
+ *    backing block — so the background sits only directly beneath the marks.
+ * Marks inside the frame (icon lines, frame ring) are unioned as-is either way.
+ * The morphological closing (`bridgeUnits`) fuses pieces to the frame so the
+ * result stays one connected printable piece. (SVG y grows down: smaller y = above.)
  */
 export function buildBaseOutline(
   parts: RawPart[],
   bridgeUnits: number,
   frameColor: string,
+  solidAmplifierBg = true,
 ): Poly[] {
   const framePolys: Poly[] = [];
   for (const part of parts) {
@@ -226,8 +232,8 @@ export function buildBaseOutline(
 
   if (frameBox) {
     const frameH = frameBox.maxY - frameBox.minY;
-    const pad = frameH * 0.04; // side margin around the marks
-    const connect = frameH * 0.06; // overlap back into the frame
+    const pad = frameH * 0.04; // side margin around the marks (solid-bg mode)
+    const connect = frameH * 0.06; // overlap back into the frame (solid-bg mode)
 
     for (const part of parts) {
       // Skip fills entirely: frame fill is already in basePolys; icon fills (cross, etc.)
@@ -237,9 +243,15 @@ export function buildBaseOutline(
         const b = boxOf([poly]);
         if (!b) continue;
         const cy = (b.minY + b.maxY) / 2;
-        if (cy < frameBox.minY) above = above ? mergeBox(above, b) : b; // echelon
-        else if (cy > frameBox.maxY) below = below ? mergeBox(below, b) : b; // mobility/towed
-        else basePolys.push(poly); // inside the frame: keep as-is (e.g. frame ring)
+        const external = cy < frameBox.minY || cy > frameBox.maxY;
+        if (external && solidAmplifierBg) {
+          // Accumulate external marks into above/below groups for a solid backing rect.
+          if (cy < frameBox.minY) above = above ? mergeBox(above, b) : b; // echelon
+          else below = below ? mergeBox(below, b) : b; // mobility/towed
+        } else {
+          // Hug the mark's own outline (Land equipment, or marks inside the frame).
+          basePolys.push(poly);
+        }
       }
     }
     if (above) {

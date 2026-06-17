@@ -46,11 +46,18 @@ src/
   explicitly; icon/text fills are raised features whose winding would punch holes in the base).
   When there's no frame fill it synthesizes the base from the outer contour of the largest
   closed stroke polygon (the frame ring).
-- **Base plate**: `buildBaseOutline` (in `svgToParts.ts`) = frame fill + a SOLID rectangle behind
-  each external amplifier group (echelon above / mobility/towed below the frame box, classified by
-  each mark's center-Y), unioned and lightly closed (`baseBridge`). The solid rects give a
-  continuous background under amplifier marks instead of a gappy trace, and keep the bottom edge
-  solid so the peg can attach there.
+- **Base plate**: `buildBaseOutline` (in `svgToParts.ts`) has two strategies for EXTERNAL
+  amplifier marks (echelon above / mobility/towed below the frame), selected by `solidAmplifierBg`:
+  - **solid background (default, all types except Land equipment)**: back each external group with a
+    SOLID rectangle spanning its extent + small pad, overlapping into the frame — continuous
+    backdrop, solid bottom edge for the peg.
+  - **mark-hugging (Land equipment, symbol set `15`)**: the base traces each external mark's OWN
+    stroke outline — no solid block — so the background sits only directly beneath each mark.
+  Either way the frame fill, frame ring and internal icon lines are unioned as-is, then
+  morphologically closed by `baseBridge`. The strategy is chosen in `main.ts` via
+  `isLandEquipment(sidc)` and threaded through `buildBadge(svg, settings, hugAmplifiers)`.
+  `baseBridge` must stay > 0 (default 1.2 mm) so external marks fuse to the frame as one piece —
+  critical in mark-hugging mode where there's no solid block bridging the gap.
 - **Peg start**: the peg ("палочка") starts at the badge's bottom edge (centered) and overlaps a
   few mm up into the solid base to fuse — it must NOT run up to the badge center.
 - **Mounting** (`settings.mount`): `'magnet'` = `negative_part` cylinder recess in the back

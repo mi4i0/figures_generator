@@ -1,5 +1,5 @@
 import './style.css';
-import { sidcToSvg, normalizeSidc } from './symbol';
+import { sidcToSvg, normalizeSidc, isLandEquipment } from './symbol';
 import { svgToParts } from './svgToParts';
 import { buildBadge } from './badgeBuilder';
 import { buildThreeMf } from './threeMf';
@@ -120,7 +120,8 @@ function regenerate(): void {
       }
     }
 
-    const model = buildBadge(parts, readSettings(widthMm, heightMm));
+    // Land equipment keeps the mark-hugging base; other types get a solid background.
+    const model = buildBadge(parts, readSettings(widthMm, heightMm), isLandEquipment(sidc));
     currentModel = model;
     currentName = sanitize(sidc);
     viewer.setModel(model);
