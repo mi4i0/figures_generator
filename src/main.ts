@@ -47,7 +47,7 @@ function readSettings(widthMm: number, heightMm: number): BadgeSettings {
     pegWidth: clamp(parseFloat(pegWidthInput.value), 0.5, 20, 2.5),
     pegLength: clamp(parseFloat(pegLengthInput.value), 1, 80, 30),
     pegHeight: clamp(parseFloat(pegHeightInput.value), 0.4, 12, 2.5),
-    baseBridge: clamp(parseFloat(baseBridgeInput.value), 0, 6, 1.2),
+    baseBridge: clamp(parseFloat(baseBridgeInput.value), 0, 6, 0),
   };
 }
 

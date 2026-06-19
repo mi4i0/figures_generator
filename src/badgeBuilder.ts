@@ -3,7 +3,7 @@ import {
   mergeGeometries,
   mergeVertices,
 } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { buildBaseOutline } from './svgToParts';
+import { buildBaseOutline, frameBoxOf } from './svgToParts';
 import type { BadgeModel, BadgeSettings, PartMesh, Poly, RawPart, SvgParts } from './types';
 
 const BLACK = '#000000';
@@ -129,13 +129,20 @@ export function buildBadge(
   const { parts, bbox } = svg;
   const width = bbox.maxX - bbox.minX;
   const height = bbox.maxY - bbox.minY;
-  const maxDim = Math.max(width, height) || 1;
+  const frameColor = detectFrameColor(parts);
+
+  // Frame plate box (the main circle/diamond/etc. WITHOUT external echelon/mobility
+  // marks) — round badges scale to this so "diameter" sizes the main circle and the
+  // amplifiers scale along with it, instead of the whole footprint shrinking the circle.
+  const fBox = frameBoxOf(parts, frameColor);
+  const frameMaxDim = fBox ? Math.max(fBox.maxX - fBox.minX, fBox.maxY - fBox.minY) : 0;
+
   // Round frames scale uniformly (diameter == widthMm) so they stay circular;
   // other shapes scale per-axis so width and height are honored independently.
   let sx: number;
   let sy: number;
   if (svg.isRound) {
-    sx = sy = settings.widthMm / maxDim;
+    sx = sy = settings.widthMm / (frameMaxDim || Math.max(width, height) || 1);
   } else {
     sx = settings.widthMm / (width || 1);
     sy = settings.heightMm / (height || 1);
@@ -144,8 +151,6 @@ export function buildBadge(
   const cx = (bbox.minX + bbox.maxX) / 2;
   const cy = (bbox.minY + bbox.maxY) / 2;
   const map = (x: number, y: number): [number, number] => [(x - cx) * sx, -(y - cy) * sy];
-
-  const frameColor = detectFrameColor(parts);
 
   // Filament slots: 1 = frame color, 2 = black, 3 = spare/extra color.
   const filamentColors = [frameColor, BLACK, '#FF0000'];
@@ -208,16 +213,20 @@ export function buildBadge(
     settings.pegLength > 0 &&
     settings.pegHeight > 0
   ) {
-    // Stand peg ("палочка"): a rod that STARTS at the bottom edge of the badge
-    // (centered) and protrudes below it, to plug into a separately-printed base.
-    // The amplifier background is solid (see buildBaseOutline), so the bottom is
-    // continuous material; the peg just overlaps a few mm up into it to fuse.
-    // Z is its own height, resting on the build plate (z=0) so badge + peg print
-    // flat as one solid piece.
+    // Stand peg ("палочка"): a rod at the bottom-center that protrudes below the
+    // badge to plug into a separately-printed base. Z is its own height, resting on
+    // the build plate (z=0) so badge + peg print flat as one solid piece.
+    //
+    // In solid-background mode the footprint bottom is continuous material, so the
+    // peg just overlaps a few mm up into it. In mark-hugging mode (Land equipment)
+    // the base below the frame is only the thin mobility/towed marks — so the peg
+    // would dangle off them. Instead start it INSIDE the main frame body and run it
+    // down through the echelon/mobility marks, fusing everything to the main object.
     const overlap = Math.min(2.5, settings.baseThickness); // mm up into the base
-    const bottomEdge = map(cx, bbox.maxY)[1]; // bottom of the footprint, in mm (negative)
-    const pegTop = bottomEdge + overlap; // start at the badge bottom, slightly inside
-    const pegBottom = bottomEdge - settings.pegLength; // tip protrudes pegLength below
+    const footBottom = map(cx, bbox.maxY)[1]; // bottom of the full footprint (mm, negative)
+    const frameBottom = fBox ? map(cx, fBox.maxY)[1] : footBottom; // bottom of the main frame
+    const pegTop = hugAmplifiers ? frameBottom + overlap : footBottom + overlap;
+    const pegBottom = footBottom - settings.pegLength; // tip protrudes pegLength below the badge
     const lengthY = pegTop - pegBottom;
     const peg = new THREE.BoxGeometry(settings.pegWidth, lengthY, settings.pegHeight);
     peg.translate(0, (pegTop + pegBottom) / 2, settings.pegHeight / 2);

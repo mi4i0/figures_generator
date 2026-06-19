@@ -31,6 +31,12 @@ src/
   Always call `normalizeSidc()` before passing to milsymbol or writing to a filename.
 - **Shape-agnostic geometry**: never assume a circular frame. `svgToParts` works on whatever
   shape milsymbol emits (circle / rectangle / rhombus / square / quatrefoil).
+- **Sizing**: `svgToParts` flags `isRound` (isoperimetric test on the largest closed polygon).
+  Round frames scale UNIFORMLY off the MAIN frame box (`frameBoxOf`, excludes external
+  echelon/mobility), so the "Діаметр" field sizes the main circle and amplifiers scale with it —
+  NOT off the full footprint (which would shrink the circle). Non-round frames scale per-axis
+  (`widthMm`/`heightMm`) off the full bbox; the height field auto-follows the natural aspect until
+  the user edits it (`main.ts` `userSetHeight`).
 - **Filament slots**: 1 = frame color, 2 = black, 3 = spare/extra. Slot 1 is the largest-area
   NON-BLACK fill color (auto-detected in `badgeBuilder.detectFrameColor`). Black fills are icon
   elements (cross, arrow…), never the frame. Stroke-only frames (e.g. medical white badges)
@@ -58,8 +64,11 @@ src/
   `isLandEquipment(sidc)` and threaded through `buildBadge(svg, settings, hugAmplifiers)`.
   `baseBridge` must stay > 0 (default 1.2 mm) so external marks fuse to the frame as one piece —
   critical in mark-hugging mode where there's no solid block bridging the gap.
-- **Peg start**: the peg ("палочка") starts at the badge's bottom edge (centered) and overlaps a
-  few mm up into the solid base to fuse — it must NOT run up to the badge center.
+- **Peg start**: the peg ("палочка") is centered, its tip protrudes `pegLength` below the full
+  footprint, and its top depends on the base strategy: in solid-background mode it overlaps a few
+  mm up into the footprint bottom; in mark-hugging mode (Land equipment) it starts INSIDE the main
+  frame body (`fBox.maxY`) and runs down THROUGH the echelon/mobility marks, so it fuses to the
+  main object instead of dangling off the thin hugged marks. It must NOT run up to the badge center.
 - **Mounting** (`settings.mount`): `'magnet'` = `negative_part` cylinder recess in the back
   (slicer subtracts it, no browser CSG; default ⌀8.2 × 2.2 mm); `'peg'` = a `normal_part` post
   ("палочка") at the bottom-center of the FULL footprint (below mobility/towed marks), in-plane

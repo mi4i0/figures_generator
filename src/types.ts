@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: BadgeSettings = {
   pegWidth: 2.5,
   pegLength: 30,
   pegHeight: 2.5,
-  baseBridge: 1.2,
+  baseBridge: 0,
 };
 
 /** An indexed triangle mesh in final millimeter coordinates. */

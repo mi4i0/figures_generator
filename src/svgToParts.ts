@@ -190,39 +190,51 @@ const rectPoly = (b: Box): Poly => ({
  * The morphological closing (`bridgeUnits`) fuses pieces to the frame so the
  * result stays one connected printable piece. (SVG y grows down: smaller y = above.)
  */
+/**
+ * The polygons that form the frame plate: fills matching the frame color, or —
+ * for stroke-only frames (e.g. medical white badges) — the outer boundary of the
+ * largest closed stroke polygon (≈ frame interior + half the stroke width).
+ * Returns [] only when there is no frame-like geometry at all.
+ */
+export function frameOutlinePolys(parts: RawPart[], frameColor: string): Poly[] {
+  const framePolys: Poly[] = [];
+  for (const part of parts) {
+    if (part.role === 'fill' && part.color === frameColor) framePolys.push(...part.polys);
+  }
+  if (framePolys.length > 0) return framePolys;
+
+  let bestArea = -1;
+  let bestPoly: Poly | null = null;
+  for (const part of parts) {
+    if (part.role !== 'stroke') continue;
+    for (const poly of part.polys) {
+      const a = ringArea(poly.outer);
+      if (a > bestArea) { bestArea = a; bestPoly = poly; }
+    }
+  }
+  if (bestPoly) framePolys.push({ outer: bestPoly.outer, holes: [] });
+  return framePolys;
+}
+
+/** Bounding box of the frame plate in SVG units (null if no frame geometry). */
+export function frameBoxOf(parts: RawPart[], frameColor: string) {
+  return boxOf(frameOutlinePolys(parts, frameColor));
+}
+
 export function buildBaseOutline(
   parts: RawPart[],
   bridgeUnits: number,
   frameColor: string,
   solidAmplifierBg = true,
 ): Poly[] {
-  const framePolys: Poly[] = [];
-  for (const part of parts) {
-    if (part.role === 'fill' && part.color === frameColor) framePolys.push(...part.polys);
-  }
+  let framePolys = frameOutlinePolys(parts, frameColor);
 
-  // When the frame has no fill (stroke-only, e.g. medical white badges) synthesize the
-  // base shape from the outer boundary of the largest closed stroke polygon.  The outer
-  // contour of a ring stroke approximates the frame interior + half stroke-width.
+  // Absolute fallback when nothing frame-like was found: bounding rect of all geometry.
   if (framePolys.length === 0) {
-    let bestArea = -1;
-    let bestPoly: Poly | null = null;
-    for (const part of parts) {
-      if (part.role !== 'stroke') continue;
-      for (const poly of part.polys) {
-        const a = ringArea(poly.outer);
-        if (a > bestArea) { bestArea = a; bestPoly = poly; }
-      }
-    }
-    if (bestPoly) {
-      framePolys.push({ outer: bestPoly.outer, holes: [] });
-    } else {
-      // Absolute fallback: bounding rect of all geometry.
-      const all: Poly[] = [];
-      for (const part of parts) all.push(...part.polys);
-      const b = boxOf(all);
-      if (b) framePolys.push(rectPoly(b));
-    }
+    const all: Poly[] = [];
+    for (const part of parts) all.push(...part.polys);
+    const b = boxOf(all);
+    if (b) framePolys = [rectPoly(b)];
   }
 
   const frameBox = boxOf(framePolys);
